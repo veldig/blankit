@@ -256,7 +256,7 @@
 
 <div class="card">
   <div id="drop-zone">
-    <input type="file" id="file-input" accept="application/pdf" />
+    <input type="file" id="file-input" accept=".pdf,application/pdf" />
     <span class="icon">📄</span>
     <p><strong>Drop your PDF here</strong> or click to browse</p>
     <p class="hint">Processed entirely in your browser — nothing is uploaded</p>
@@ -335,6 +335,16 @@
 
   clearBtn.addEventListener('click', reset);
 
+  function readFileAsArrayBuffer(file) {
+    if (file.arrayBuffer) return file.arrayBuffer();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
   function formatBytes(bytes) {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
@@ -353,7 +363,7 @@
 
     // Quick page count read
     try {
-      const buf = await file.arrayBuffer();
+      const buf = await readFileAsArrayBuffer(file);
       const pdf = await PDFLib.PDFDocument.load(buf, { ignoreEncryption: true });
       originalPageCount = pdf.getPageCount();
       fileMetaLbl.textContent = `${formatBytes(file.size)} · ${originalPageCount} page${originalPageCount !== 1 ? 's' : ''}`;
@@ -407,7 +417,7 @@
     setProgress(5, 'Loading PDF…');
 
     try {
-      const buf = await selectedFile.arrayBuffer();
+      const buf = await readFileAsArrayBuffer(selectedFile);
       setProgress(20, 'Parsing pages…');
 
       const srcDoc = await PDFLib.PDFDocument.load(buf, { ignoreEncryption: true });
@@ -438,17 +448,26 @@
 
       setProgress(100, 'Done!');
 
-      // Trigger download
       const blob = new Blob([outBytes], { type: 'application/pdf' });
       const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
       const baseName = selectedFile.name.replace(/\.pdf$/i, '');
-      a.href     = url;
-      a.download = `${baseName}_with-blanks.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      const fileName = `${baseName}_with-blanks.pdf`;
 
-      progressLbl.textContent = `Done! ${pageCount} → ${pageCount * 2} pages. Downloading…`;
+      // iOS Safari blocks programmatic clicks — show a tap-to-save link instead
+      const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (isIOS) {
+        progressLbl.innerHTML = `Done! ${pageCount} → ${pageCount * 2} pages.<br><a href="${url}" target="_blank" style="color:#6c47ff;font-weight:700;">Tap here to open & save the PDF</a>`;
+      } else {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        progressLbl.textContent = `Done! ${pageCount} → ${pageCount * 2} pages. Downloading…`;
+      }
+
       actionBtn.disabled = false;
       actionBtn.textContent = 'Process Another PDF';
       actionBtn.onclick = () => { reset(); actionBtn.onclick = null; };
