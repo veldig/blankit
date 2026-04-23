@@ -237,6 +237,90 @@
       color: #c0392b;
     }
 
+    /* Options panel */
+    #options {
+      display: none;
+      flex-direction: column;
+      gap: 0;
+      margin-top: 20px;
+      border: 1px solid #eee;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .option-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      gap: 12px;
+      background: #fafafa;
+    }
+
+    .option-row + .option-row { border-top: 1px solid #eee; }
+
+    .option-label { display: flex; flex-direction: column; gap: 2px; }
+    .option-title { font-size: 0.9rem; font-weight: 600; }
+    .option-sub   { font-size: 0.75rem; color: #999; }
+
+    /* Stepper */
+    .stepper {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .step-btn {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      border: 1.5px solid #ddd;
+      background: #fff;
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
+      color: #444;
+      display: flex; align-items: center; justify-content: center;
+      transition: border-color 0.15s;
+    }
+
+    .step-btn:hover { border-color: #6c47ff; color: #6c47ff; }
+
+    #copies-val {
+      font-size: 1.1rem;
+      font-weight: 700;
+      min-width: 24px;
+      text-align: center;
+    }
+
+    /* Toggle switch */
+    .toggle { position: relative; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+
+    .track {
+      display: block;
+      width: 44px; height: 26px;
+      background: #ddd;
+      border-radius: 99px;
+      cursor: pointer;
+      transition: background 0.2s;
+      position: relative;
+    }
+
+    .track::after {
+      content: '';
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      transition: transform 0.2s;
+    }
+
+    .toggle input:checked + .track { background: #6c47ff; }
+    .toggle input:checked + .track::after { transform: translateX(18px); }
+
     footer {
       margin-top: 32px;
       font-size: 0.8rem;
@@ -271,6 +355,31 @@
     <button class="clear-btn" id="clear-btn" title="Remove file">✕</button>
   </div>
 
+  <!-- Options -->
+  <div id="options">
+    <div class="option-row">
+      <div class="option-label">
+        <span class="option-title">Copies per page</span>
+        <span class="option-sub">Repeat each page this many times</span>
+      </div>
+      <div class="stepper">
+        <button class="step-btn" id="copies-down">−</button>
+        <span id="copies-val">1</span>
+        <button class="step-btn" id="copies-up">+</button>
+      </div>
+    </div>
+    <div class="option-row">
+      <div class="option-label">
+        <span class="option-title">Add blank page after each</span>
+        <span class="option-sub">For double-sided printing</span>
+      </div>
+      <label class="toggle">
+        <input type="checkbox" id="blank-toggle" checked />
+        <span class="track"></span>
+      </label>
+    </div>
+  </div>
+
   <div id="stats">
     <div class="stat-box">
       <div class="label">Original pages</div>
@@ -282,7 +391,7 @@
     </div>
   </div>
 
-  <button id="action-btn" disabled>Add Blank Pages</button>
+  <button id="action-btn" disabled>Process PDF</button>
 
   <div id="progress-wrap">
     <div id="progress-bar-bg"><div id="progress-bar"></div></div>
@@ -313,8 +422,27 @@
   const progressLbl = document.getElementById('progress-label');
   const errorMsg    = document.getElementById('error-msg');
 
+  const optionsEl   = document.getElementById('options');
+  const copiesValEl = document.getElementById('copies-val');
+  const copiesDown  = document.getElementById('copies-down');
+  const copiesUp    = document.getElementById('copies-up');
+  const blankToggle = document.getElementById('blank-toggle');
+
   let selectedFile = null;
   let originalPageCount = 0;
+  let copies = 1;
+
+  copiesDown.addEventListener('click', () => { if (copies > 1) { copies--; updateCopiesUI(); } });
+  copiesUp.addEventListener('click',   () => { if (copies < 10) { copies++; updateCopiesUI(); } });
+  blankToggle.addEventListener('change', updateCopiesUI);
+
+  function updateCopiesUI() {
+    copiesValEl.textContent = copies;
+    if (originalPageCount) {
+      const blanks = blankToggle.checked ? originalPageCount * copies : 0;
+      statNew.textContent = originalPageCount * copies + blanks;
+    }
+  }
 
   // Drag & drop
   dropZone.addEventListener('dragover', e => {
@@ -368,8 +496,9 @@
       originalPageCount = pdf.getPageCount();
       fileMetaLbl.textContent = `${formatBytes(file.size)} · ${originalPageCount} page${originalPageCount !== 1 ? 's' : ''}`;
       statOrig.textContent = originalPageCount;
-      statNew.textContent  = originalPageCount * 2;
       statsEl.style.display = 'grid';
+      optionsEl.style.display = 'flex';
+      updateCopiesUI();
     } catch {
       fileMetaLbl.textContent = formatBytes(file.size);
       statsEl.style.display = 'none';
@@ -384,9 +513,11 @@
     selectedFile = null;
     originalPageCount = 0;
     fileInput.value = '';
-    fileInfo.style.display = 'none';
-    statsEl.style.display  = 'none';
+    fileInfo.style.display   = 'none';
+    optionsEl.style.display  = 'none';
+    statsEl.style.display    = 'none';
     progressWrap.style.display = 'none';
+    copies = 1; copiesValEl.textContent = 1;
     progressBar.style.width = '0%';
     actionBtn.disabled = true;
     actionBtn.textContent = 'Add Blank Pages';
@@ -426,20 +557,20 @@
       const outDoc = await PDFLib.PDFDocument.create();
       setProgress(30, 'Inserting blank pages…');
 
-      // Copy pages one at a time and insert blank after each
+      const addBlanks = blankToggle.checked;
+      const totalOut  = pageCount * copies + (addBlanks ? pageCount * copies : 0);
+
       for (let i = 0; i < pageCount; i++) {
-        const [copiedPage] = await outDoc.copyPages(srcDoc, [i]);
-        outDoc.addPage(copiedPage);
-
-        // Blank page — same dimensions
-        const { width, height } = copiedPage.getSize();
-        outDoc.addPage([width, height]);
-
-        // Update progress 30→85 across pages
+        for (let c = 0; c < copies; c++) {
+          const [copiedPage] = await outDoc.copyPages(srcDoc, [i]);
+          outDoc.addPage(copiedPage);
+          if (addBlanks) {
+            const { width, height } = copiedPage.getSize();
+            outDoc.addPage([width, height]);
+          }
+        }
         const pct = 30 + Math.round(((i + 1) / pageCount) * 55);
         setProgress(pct, `Processing page ${i + 1} of ${pageCount}…`);
-
-        // Yield to the event loop every 20 pages so the UI stays responsive
         if (i % 20 === 19) await new Promise(r => setTimeout(r, 0));
       }
 
@@ -456,7 +587,7 @@
       // iOS Safari blocks programmatic clicks — show a tap-to-save link instead
       const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       if (isIOS) {
-        progressLbl.innerHTML = `Done! ${pageCount} → ${pageCount * 2} pages.<br><a href="${url}" target="_blank" style="color:#6c47ff;font-weight:700;">Tap here to open & save the PDF</a>`;
+        progressLbl.innerHTML = `Done! ${pageCount} → ${outDoc.getPageCount()} pages.<br><a href="${url}" target="_blank" style="color:#6c47ff;font-weight:700;">Tap here to open & save the PDF</a>`;
       } else {
         const a = document.createElement('a');
         a.href = url;
@@ -465,7 +596,7 @@
         a.click();
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(url), 10000);
-        progressLbl.textContent = `Done! ${pageCount} → ${pageCount * 2} pages. Downloading…`;
+        progressLbl.textContent = `Done! ${pageCount} → ${outDoc.getPageCount()} pages. Downloading…`;
       }
 
       actionBtn.disabled = false;
