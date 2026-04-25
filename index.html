@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BlankIt — Add blank pages to any PDF</title>
   <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -31,9 +32,7 @@
       letter-spacing: -0.5px;
     }
 
-    header h1 span {
-      color: #6c47ff;
-    }
+    header h1 span { color: #6c47ff; }
 
     header p {
       margin-top: 8px;
@@ -47,14 +46,14 @@
       box-shadow: 0 4px 32px rgba(0,0,0,0.08);
       padding: 40px;
       width: 100%;
-      max-width: 520px;
+      max-width: 540px;
     }
 
     /* Drop zone */
     #drop-zone {
       border: 2.5px dashed #d0cce8;
       border-radius: 14px;
-      padding: 48px 24px;
+      padding: 40px 24px;
       text-align: center;
       cursor: pointer;
       transition: border-color 0.2s, background 0.2s;
@@ -75,80 +74,158 @@
       height: 100%;
     }
 
-    #drop-zone .icon {
-      font-size: 2.5rem;
-      margin-bottom: 12px;
-      display: block;
-    }
+    #drop-zone .icon { font-size: 2.2rem; margin-bottom: 10px; display: block; }
+    #drop-zone p { font-size: 1rem; color: #555; }
+    #drop-zone strong { color: #6c47ff; }
+    #drop-zone .hint { font-size: 0.8rem; color: #aaa; margin-top: 6px; }
 
-    #drop-zone p {
-      font-size: 1rem;
-      color: #555;
-    }
-
-    #drop-zone strong {
-      color: #6c47ff;
-    }
-
-    #drop-zone .hint {
-      font-size: 0.8rem;
-      color: #aaa;
-      margin-top: 6px;
-    }
-
-    /* File selected state */
-    #file-info {
+    /* File list */
+    #file-list {
       display: none;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 16px;
+    }
+
+    .file-row {
+      display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       background: #f3f0ff;
       border-radius: 10px;
-      padding: 14px 16px;
-      margin-top: 20px;
+      padding: 10px 14px;
     }
 
-    #file-info .file-icon {
-      font-size: 1.6rem;
-      flex-shrink: 0;
-    }
+    .file-row .ficon { font-size: 1.2rem; flex-shrink: 0; }
 
-    #file-info .file-details {
+    .file-row .fdetails {
       flex: 1;
       min-width: 0;
     }
 
-    #file-info .file-name {
+    .file-row .fname {
       font-weight: 600;
-      font-size: 0.95rem;
+      font-size: 0.88rem;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
-    #file-info .file-meta {
-      font-size: 0.8rem;
-      color: #888;
-      margin-top: 2px;
-    }
+    .file-row .fmeta { font-size: 0.75rem; color: #999; margin-top: 1px; }
 
-    #file-info .clear-btn {
-      background: none;
-      border: none;
-      color: #aaa;
-      cursor: pointer;
-      font-size: 1.2rem;
-      padding: 4px;
-      line-height: 1;
+    .file-row .fstatus {
+      font-size: 0.75rem;
+      font-weight: 600;
       flex-shrink: 0;
+      color: #aaa;
     }
 
-    #file-info .clear-btn:hover { color: #666; }
+    .file-row .fstatus.done  { color: #22c55e; }
+    .file-row .fstatus.error { color: #ef4444; }
+    .file-row .fstatus.active { color: #6c47ff; }
+
+    .file-row .fremove {
+      background: none; border: none;
+      color: #ccc; cursor: pointer;
+      font-size: 1rem; padding: 2px 4px;
+      line-height: 1; flex-shrink: 0;
+    }
+    .file-row .fremove:hover { color: #888; }
+
+    /* Add more / clear all row */
+    #file-actions {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+    }
+
+    .link-btn {
+      background: none; border: none;
+      color: #6c47ff; font-size: 0.82rem;
+      font-weight: 600; cursor: pointer;
+      padding: 0;
+    }
+    .link-btn:hover { text-decoration: underline; }
+    .link-btn.danger { color: #aaa; }
+    .link-btn.danger:hover { color: #888; }
+
+    /* Options */
+    #options {
+      display: none;
+      flex-direction: column;
+      gap: 0;
+      margin-top: 20px;
+      border: 1px solid #eee;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .option-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px;
+      gap: 12px;
+      background: #fafafa;
+    }
+
+    .option-row + .option-row { border-top: 1px solid #eee; }
+
+    .option-label { display: flex; flex-direction: column; gap: 2px; }
+    .option-title { font-size: 0.9rem; font-weight: 600; }
+    .option-sub   { font-size: 0.75rem; color: #999; }
+
+    /* Stepper */
+    .stepper { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+
+    .step-btn {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      border: 1.5px solid #ddd;
+      background: #fff;
+      font-size: 1.1rem; font-weight: 700;
+      cursor: pointer; color: #444;
+      display: flex; align-items: center; justify-content: center;
+      transition: border-color 0.15s;
+    }
+    .step-btn:hover { border-color: #6c47ff; color: #6c47ff; }
+
+    #copies-val { font-size: 1.1rem; font-weight: 700; min-width: 24px; text-align: center; }
+
+    /* Toggle */
+    .toggle { position: relative; flex-shrink: 0; }
+    .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+
+    .track {
+      display: block;
+      width: 44px; height: 26px;
+      background: #ddd;
+      border-radius: 99px;
+      cursor: pointer;
+      transition: background 0.2s;
+      position: relative;
+    }
+
+    .track::after {
+      content: '';
+      position: absolute;
+      top: 3px; left: 3px;
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+      transition: transform 0.2s;
+    }
+
+    .toggle input:checked + .track { background: #6c47ff; }
+    .toggle input:checked + .track::after { transform: translateX(18px); }
 
     /* Stats */
     #stats {
       display: none;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
       margin-top: 20px;
     }
 
@@ -156,19 +233,19 @@
       background: #fafafa;
       border: 1px solid #eee;
       border-radius: 10px;
-      padding: 14px 16px;
+      padding: 12px 10px;
       text-align: center;
     }
 
     .stat-box .label {
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       color: #999;
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
 
     .stat-box .value {
-      font-size: 1.6rem;
+      font-size: 1.4rem;
       font-weight: 700;
       margin-top: 4px;
       color: #1a1a1a;
@@ -198,10 +275,7 @@
     #action-btn:disabled { background: #c4b8ff; cursor: not-allowed; }
 
     /* Progress */
-    #progress-wrap {
-      display: none;
-      margin-top: 16px;
-    }
+    #progress-wrap { display: none; margin-top: 16px; }
 
     #progress-bar-bg {
       height: 6px;
@@ -215,7 +289,7 @@
       background: #6c47ff;
       border-radius: 99px;
       width: 0%;
-      transition: width 0.3s ease;
+      transition: width 0.25s ease;
     }
 
     #progress-label {
@@ -237,90 +311,6 @@
       color: #c0392b;
     }
 
-    /* Options panel */
-    #options {
-      display: none;
-      flex-direction: column;
-      gap: 0;
-      margin-top: 20px;
-      border: 1px solid #eee;
-      border-radius: 12px;
-      overflow: hidden;
-    }
-
-    .option-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px 16px;
-      gap: 12px;
-      background: #fafafa;
-    }
-
-    .option-row + .option-row { border-top: 1px solid #eee; }
-
-    .option-label { display: flex; flex-direction: column; gap: 2px; }
-    .option-title { font-size: 0.9rem; font-weight: 600; }
-    .option-sub   { font-size: 0.75rem; color: #999; }
-
-    /* Stepper */
-    .stepper {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      flex-shrink: 0;
-    }
-
-    .step-btn {
-      width: 32px; height: 32px;
-      border-radius: 8px;
-      border: 1.5px solid #ddd;
-      background: #fff;
-      font-size: 1.1rem;
-      font-weight: 700;
-      cursor: pointer;
-      color: #444;
-      display: flex; align-items: center; justify-content: center;
-      transition: border-color 0.15s;
-    }
-
-    .step-btn:hover { border-color: #6c47ff; color: #6c47ff; }
-
-    #copies-val {
-      font-size: 1.1rem;
-      font-weight: 700;
-      min-width: 24px;
-      text-align: center;
-    }
-
-    /* Toggle switch */
-    .toggle { position: relative; flex-shrink: 0; }
-    .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
-
-    .track {
-      display: block;
-      width: 44px; height: 26px;
-      background: #ddd;
-      border-radius: 99px;
-      cursor: pointer;
-      transition: background 0.2s;
-      position: relative;
-    }
-
-    .track::after {
-      content: '';
-      position: absolute;
-      top: 3px; left: 3px;
-      width: 20px; height: 20px;
-      border-radius: 50%;
-      background: #fff;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-      transition: transform 0.2s;
-    }
-
-    .toggle input:checked + .track { background: #6c47ff; }
-    .toggle input:checked + .track::after { transform: translateX(18px); }
-
     footer {
       margin-top: 32px;
       font-size: 0.8rem;
@@ -335,25 +325,25 @@
 
 <header>
   <h1>Blank<span>It</span></h1>
-  <p>Insert a blank page after every page — perfect for double-sided printing.</p>
+  <p>Insert blank pages &amp; duplicate pages in any PDF — right in your browser.</p>
 </header>
 
 <div class="card">
+
   <div id="drop-zone">
-    <input type="file" id="file-input" accept=".pdf,application/pdf" />
+    <input type="file" id="file-input" accept=".pdf,application/pdf" multiple />
     <span class="icon">📄</span>
-    <p><strong>Drop your PDF here</strong> or click to browse</p>
-    <p class="hint">Processed entirely in your browser — nothing is uploaded</p>
+    <p><strong>Drop PDFs here</strong> or click to browse</p>
+    <p class="hint">Select one or many — processed entirely in your browser</p>
   </div>
 
-  <div id="file-info">
-    <span class="file-icon">📋</span>
-    <div class="file-details">
-      <div class="file-name" id="file-name-label"></div>
-      <div class="file-meta" id="file-meta-label"></div>
-    </div>
-    <button class="clear-btn" id="clear-btn" title="Remove file">✕</button>
+  <div id="file-list"></div>
+
+  <div id="file-actions">
+    <button class="link-btn" id="add-more-btn">+ Add more PDFs</button>
+    <button class="link-btn danger" id="clear-all-btn">Clear all</button>
   </div>
+  <input type="file" id="add-more-input" accept=".pdf,application/pdf" multiple style="display:none" />
 
   <!-- Options -->
   <div id="options">
@@ -382,11 +372,15 @@
 
   <div id="stats">
     <div class="stat-box">
+      <div class="label">Files</div>
+      <div class="value" id="stat-files">—</div>
+    </div>
+    <div class="stat-box">
       <div class="label">Original pages</div>
       <div class="value" id="stat-original">—</div>
     </div>
     <div class="stat-box highlight">
-      <div class="label">New page count</div>
+      <div class="label">Pages per file</div>
       <div class="value" id="stat-new">—</div>
     </div>
   </div>
@@ -398,7 +392,7 @@
     <div id="progress-label">Processing…</div>
   </div>
 
-  <div id="error-msg" id="error-msg"></div>
+  <div id="error-msg"></div>
 </div>
 
 <footer>
@@ -407,67 +401,58 @@
 </footer>
 
 <script>
-  const dropZone    = document.getElementById('drop-zone');
-  const fileInput   = document.getElementById('file-input');
-  const fileInfo    = document.getElementById('file-info');
-  const fileNameLbl = document.getElementById('file-name-label');
-  const fileMetaLbl = document.getElementById('file-meta-label');
-  const clearBtn    = document.getElementById('clear-btn');
-  const statsEl     = document.getElementById('stats');
-  const statOrig    = document.getElementById('stat-original');
-  const statNew     = document.getElementById('stat-new');
-  const actionBtn   = document.getElementById('action-btn');
-  const progressWrap= document.getElementById('progress-wrap');
-  const progressBar = document.getElementById('progress-bar');
-  const progressLbl = document.getElementById('progress-label');
-  const errorMsg    = document.getElementById('error-msg');
+  const dropZone     = document.getElementById('drop-zone');
+  const fileInput    = document.getElementById('file-input');
+  const fileListEl   = document.getElementById('file-list');
+  const fileActionsEl= document.getElementById('file-actions');
+  const addMoreBtn   = document.getElementById('add-more-btn');
+  const addMoreInput = document.getElementById('add-more-input');
+  const clearAllBtn  = document.getElementById('clear-all-btn');
+  const optionsEl    = document.getElementById('options');
+  const copiesValEl  = document.getElementById('copies-val');
+  const copiesDown   = document.getElementById('copies-down');
+  const copiesUp     = document.getElementById('copies-up');
+  const blankToggle  = document.getElementById('blank-toggle');
+  const statsEl      = document.getElementById('stats');
+  const statFiles    = document.getElementById('stat-files');
+  const statOrig     = document.getElementById('stat-original');
+  const statNew      = document.getElementById('stat-new');
+  const actionBtn    = document.getElementById('action-btn');
+  const progressWrap = document.getElementById('progress-wrap');
+  const progressBar  = document.getElementById('progress-bar');
+  const progressLbl  = document.getElementById('progress-label');
+  const errorMsg     = document.getElementById('error-msg');
 
-  const optionsEl   = document.getElementById('options');
-  const copiesValEl = document.getElementById('copies-val');
-  const copiesDown  = document.getElementById('copies-down');
-  const copiesUp    = document.getElementById('copies-up');
-  const blankToggle = document.getElementById('blank-toggle');
-
-  let selectedFile = null;
-  let originalPageCount = 0;
+  // State
+  let files = []; // { file, name, pages }
   let copies = 1;
 
-  copiesDown.addEventListener('click', () => { if (copies > 1) { copies--; updateCopiesUI(); } });
-  copiesUp.addEventListener('click',   () => { if (copies < 10) { copies++; updateCopiesUI(); } });
-  blankToggle.addEventListener('change', updateCopiesUI);
+  // ── Stepper & toggle ────────────────────────────────
+  copiesDown.addEventListener('click', () => { if (copies > 1)  { copies--; refreshStats(); } });
+  copiesUp.addEventListener('click',   () => { if (copies < 10) { copies++; refreshStats(); } });
+  blankToggle.addEventListener('change', refreshStats);
 
-  function updateCopiesUI() {
+  function refreshStats() {
     copiesValEl.textContent = copies;
-    if (originalPageCount) {
-      const blanks = blankToggle.checked ? originalPageCount * copies : 0;
-      statNew.textContent = originalPageCount * copies + blanks;
-    }
+    if (!files.length) return;
+    const totalPages = files.reduce((s, f) => s + (f.pages || 0), 0);
+    const avgPages   = Math.round(totalPages / files.length);
+    const outPerFile = avgPages * copies * (blankToggle.checked ? 2 : 1);
+    statFiles.textContent   = files.length;
+    statOrig.textContent    = totalPages;
+    statNew.textContent     = outPerFile + (files.length > 1 ? ' avg' : '');
+    statsEl.style.display   = 'grid';
+    optionsEl.style.display = 'flex';
+    actionBtn.disabled      = false;
+    actionBtn.textContent   = files.length === 1 ? 'Process PDF' : `Process ${files.length} PDFs`;
   }
 
-  // Drag & drop
-  dropZone.addEventListener('dragover', e => {
-    e.preventDefault();
-    dropZone.classList.add('drag-over');
-  });
-  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-  dropZone.addEventListener('drop', e => {
-    e.preventDefault();
-    dropZone.classList.remove('drag-over');
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
-  });
-
-  fileInput.addEventListener('change', () => {
-    if (fileInput.files[0]) handleFile(fileInput.files[0]);
-  });
-
-  clearBtn.addEventListener('click', reset);
-
+  // ── File reading ─────────────────────────────────────
   function readFileAsArrayBuffer(file) {
     if (file.arrayBuffer) return file.arrayBuffer();
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
+      reader.onload  = () => resolve(reader.result);
       reader.onerror = reject;
       reader.readAsArrayBuffer(file);
     });
@@ -479,129 +464,234 @@
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
-  async function handleFile(file) {
+  // ── Drag & drop ──────────────────────────────────────
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    addFiles([...e.dataTransfer.files]);
+  });
+
+  fileInput.addEventListener('change', () => { addFiles([...fileInput.files]); fileInput.value = ''; });
+
+  addMoreBtn.addEventListener('click', () => addMoreInput.click());
+  addMoreInput.addEventListener('change', () => { addFiles([...addMoreInput.files]); addMoreInput.value = ''; });
+
+  clearAllBtn.addEventListener('click', reset);
+
+  // ── Add files ────────────────────────────────────────
+  async function addFiles(incoming) {
+    const pdfs = incoming.filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+    if (!pdfs.length) { showError('No valid PDF files found.'); return; }
     hideError();
-    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-      showError('Please select a valid PDF file.');
-      return;
+
+    for (const f of pdfs) {
+      // Deduplicate by name+size
+      if (files.find(x => x.name === f.name && x.file.size === f.size)) continue;
+      const entry = { file: f, name: f.name, pages: null, rowEl: null };
+      files.push(entry);
+      entry.rowEl = createRow(entry);
+      fileListEl.appendChild(entry.rowEl);
     }
 
-    selectedFile = file;
-    fileNameLbl.textContent = file.name;
+    fileListEl.style.display  = 'flex';
+    fileActionsEl.style.display = 'flex';
+    refreshStats();
 
-    // Quick page count read
-    try {
-      const buf = await readFileAsArrayBuffer(file);
-      const pdf = await PDFLib.PDFDocument.load(buf, { ignoreEncryption: true });
-      originalPageCount = pdf.getPageCount();
-      fileMetaLbl.textContent = `${formatBytes(file.size)} · ${originalPageCount} page${originalPageCount !== 1 ? 's' : ''}`;
-      statOrig.textContent = originalPageCount;
-      statsEl.style.display = 'grid';
-      optionsEl.style.display = 'flex';
-      updateCopiesUI();
-    } catch {
-      fileMetaLbl.textContent = formatBytes(file.size);
-      statsEl.style.display = 'none';
+    // Load page counts async
+    for (const entry of files.filter(e => e.pages === null)) {
+      try {
+        const buf = await readFileAsArrayBuffer(entry.file);
+        const pdf = await PDFLib.PDFDocument.load(buf, { ignoreEncryption: true });
+        entry.pages = pdf.getPageCount();
+        entry.rowEl.querySelector('.fmeta').textContent =
+          `${formatBytes(entry.file.size)} · ${entry.pages} page${entry.pages !== 1 ? 's' : ''}`;
+      } catch {
+        entry.pages = 0;
+        entry.rowEl.querySelector('.fmeta').textContent = formatBytes(entry.file.size);
+      }
+      refreshStats();
     }
-
-    fileInfo.style.display = 'flex';
-    actionBtn.disabled = false;
-    actionBtn.textContent = 'Add Blank Pages';
   }
 
+  function createRow(entry) {
+    const row = document.createElement('div');
+    row.className = 'file-row';
+    row.innerHTML = `
+      <span class="ficon">📋</span>
+      <div class="fdetails">
+        <div class="fname">${entry.name}</div>
+        <div class="fmeta">${formatBytes(entry.file.size)}</div>
+      </div>
+      <span class="fstatus">—</span>
+      <button class="fremove" title="Remove">✕</button>
+    `;
+    row.querySelector('.fremove').addEventListener('click', () => removeFile(entry));
+    return row;
+  }
+
+  function removeFile(entry) {
+    files = files.filter(f => f !== entry);
+    entry.rowEl.remove();
+    if (!files.length) {
+      reset();
+    } else {
+      refreshStats();
+    }
+  }
+
+  // ── Reset ────────────────────────────────────────────
   function reset() {
-    selectedFile = null;
-    originalPageCount = 0;
-    fileInput.value = '';
-    fileInfo.style.display   = 'none';
-    optionsEl.style.display  = 'none';
-    statsEl.style.display    = 'none';
-    progressWrap.style.display = 'none';
-    copies = 1; copiesValEl.textContent = 1;
-    progressBar.style.width = '0%';
-    actionBtn.disabled = true;
-    actionBtn.textContent = 'Add Blank Pages';
+    files = [];
+    copies = 1;
+    copiesValEl.textContent = 1;
+    fileListEl.innerHTML = '';
+    fileListEl.style.display    = 'none';
+    fileActionsEl.style.display = 'none';
+    optionsEl.style.display     = 'none';
+    statsEl.style.display       = 'none';
+    progressWrap.style.display  = 'none';
+    progressBar.style.width     = '0%';
+    actionBtn.disabled          = true;
+    actionBtn.textContent       = 'Process PDF';
+    actionBtn.onclick           = null;
     hideError();
   }
 
+  // ── Progress ─────────────────────────────────────────
   function setProgress(pct, label) {
     progressWrap.style.display = 'block';
-    progressBar.style.width = pct + '%';
-    progressLbl.textContent = label;
+    progressBar.style.width    = pct + '%';
+    progressLbl.textContent    = label;
   }
 
-  function showError(msg) {
-    errorMsg.textContent = msg;
-    errorMsg.style.display = 'block';
+  function showError(msg) { errorMsg.textContent = msg; errorMsg.style.display = 'block'; }
+  function hideError()    { errorMsg.textContent = ''; errorMsg.style.display = 'none'; }
+
+  // ── Process one PDF ──────────────────────────────────
+  async function processPDF(entry, addBlanks) {
+    const buf    = await readFileAsArrayBuffer(entry.file);
+    const srcDoc = await PDFLib.PDFDocument.load(buf, { ignoreEncryption: true });
+    const outDoc = await PDFLib.PDFDocument.create();
+    const pageCount = srcDoc.getPageCount();
+
+    for (let i = 0; i < pageCount; i++) {
+      for (let c = 0; c < copies; c++) {
+        const [pg] = await outDoc.copyPages(srcDoc, [i]);
+        outDoc.addPage(pg);
+        if (addBlanks) {
+          const { width, height } = pg.getSize();
+          outDoc.addPage([width, height]);
+        }
+      }
+      if (i % 20 === 19) await new Promise(r => setTimeout(r, 0));
+    }
+
+    return outDoc.save();
   }
 
-  function hideError() {
-    errorMsg.style.display = 'none';
-    errorMsg.textContent = '';
+  // ── Download helpers ─────────────────────────────────
+  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  function downloadBlob(bytes, fileName) {
+    const blob = new Blob([bytes], { type: 'application/pdf' });
+    const url  = URL.createObjectURL(blob);
+    if (isIOS) {
+      progressLbl.innerHTML += `<br><a href="${url}" target="_blank"
+        style="color:#6c47ff;font-weight:700;">Tap to save: ${fileName}</a>`;
+    } else {
+      const a = document.createElement('a');
+      a.href = url; a.download = fileName;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    }
   }
 
+  function setRowStatus(entry, cls, text) {
+    const s = entry.rowEl.querySelector('.fstatus');
+    s.className = 'fstatus ' + cls;
+    s.textContent = text;
+  }
+
+  // ── Main action ──────────────────────────────────────
   actionBtn.addEventListener('click', async () => {
-    if (!selectedFile) return;
+    if (!files.length) return;
 
     actionBtn.disabled = true;
     hideError();
-    setProgress(5, 'Loading PDF…');
+    progressWrap.style.display = 'block';
+    progressBar.style.width    = '0%';
+
+    const addBlanks = blankToggle.checked;
+    const isBatch   = files.length > 1;
 
     try {
-      const buf = await readFileAsArrayBuffer(selectedFile);
-      setProgress(20, 'Parsing pages…');
+      if (isBatch) {
+        // ── Batch: collect all into a ZIP ──
+        const zip = new JSZip();
+        const folder = zip.folder('blankit');
 
-      const srcDoc = await PDFLib.PDFDocument.load(buf, { ignoreEncryption: true });
-      const pageCount = srcDoc.getPageCount();
+        for (let i = 0; i < files.length; i++) {
+          const entry = files[i];
+          setProgress(
+            Math.round((i / files.length) * 85),
+            `Processing file ${i + 1} of ${files.length}: ${entry.name}…`
+          );
+          setRowStatus(entry, 'active', '⏳');
 
-      const outDoc = await PDFLib.PDFDocument.create();
-      setProgress(30, 'Inserting blank pages…');
-
-      const addBlanks = blankToggle.checked;
-      const totalOut  = pageCount * copies + (addBlanks ? pageCount * copies : 0);
-
-      for (let i = 0; i < pageCount; i++) {
-        for (let c = 0; c < copies; c++) {
-          const [copiedPage] = await outDoc.copyPages(srcDoc, [i]);
-          outDoc.addPage(copiedPage);
-          if (addBlanks) {
-            const { width, height } = copiedPage.getSize();
-            outDoc.addPage([width, height]);
+          try {
+            const outBytes = await processPDF(entry, addBlanks);
+            const outName  = entry.name.replace(/\.pdf$/i, '') + '_blankit.pdf';
+            folder.file(outName, outBytes);
+            setRowStatus(entry, 'done', '✓');
+          } catch (err) {
+            setRowStatus(entry, 'error', '✕');
+            console.error('Failed:', entry.name, err);
           }
         }
-        const pct = 30 + Math.round(((i + 1) / pageCount) * 55);
-        setProgress(pct, `Processing page ${i + 1} of ${pageCount}…`);
-        if (i % 20 === 19) await new Promise(r => setTimeout(r, 0));
-      }
 
-      setProgress(90, 'Saving PDF…');
-      const outBytes = await outDoc.save();
+        setProgress(90, 'Zipping files…');
+        const zipBlob = await zip.generateAsync(
+          { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 3 } },
+          meta => setProgress(90 + Math.round(meta.percent * 0.1), 'Zipping…')
+        );
 
-      setProgress(100, 'Done!');
+        setProgress(100, `Done! ${files.length} PDFs zipped. Downloading…`);
 
-      const blob = new Blob([outBytes], { type: 'application/pdf' });
-      const url  = URL.createObjectURL(blob);
-      const baseName = selectedFile.name.replace(/\.pdf$/i, '');
-      const fileName = `${baseName}_with-blanks.pdf`;
+        if (isIOS) {
+          const url = URL.createObjectURL(zipBlob);
+          progressLbl.innerHTML = `Done! <a href="${url}" target="_blank"
+            style="color:#6c47ff;font-weight:700;">Tap to save blankit.zip</a>`;
+        } else {
+          const url = URL.createObjectURL(zipBlob);
+          const a   = document.createElement('a');
+          a.href = url; a.download = 'blankit.zip';
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 15000);
+          progressLbl.textContent = `Done! ${files.length} PDFs → blankit.zip`;
+        }
 
-      // iOS Safari blocks programmatic clicks — show a tap-to-save link instead
-      const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      if (isIOS) {
-        progressLbl.innerHTML = `Done! ${pageCount} → ${outDoc.getPageCount()} pages.<br><a href="${url}" target="_blank" style="color:#6c47ff;font-weight:700;">Tap here to open & save the PDF</a>`;
       } else {
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 10000);
-        progressLbl.textContent = `Done! ${pageCount} → ${outDoc.getPageCount()} pages. Downloading…`;
+        // ── Single file ──
+        const entry = files[0];
+        setRowStatus(entry, 'active', '⏳');
+        setProgress(10, `Loading ${entry.name}…`);
+
+        const outBytes = await processPDF(entry, addBlanks);
+        const outName  = entry.name.replace(/\.pdf$/i, '') + '_blankit.pdf';
+
+        setProgress(100, 'Done!');
+        setRowStatus(entry, 'done', '✓');
+        downloadBlob(outBytes, outName);
+
+        if (!isIOS) progressLbl.textContent = `Done! Downloaded ${outName}`;
       }
 
-      actionBtn.disabled = false;
-      actionBtn.textContent = 'Process Another PDF';
-      actionBtn.onclick = () => { reset(); actionBtn.onclick = null; };
+      actionBtn.disabled    = false;
+      actionBtn.textContent = 'Process Again';
+      actionBtn.onclick     = () => { reset(); actionBtn.onclick = null; };
 
     } catch (err) {
       console.error(err);
