@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BlankIt — Add blank pages to any PDF</title>
+  <title>BlankIt — PDF Page Editor</title>
   <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
   <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -21,24 +22,10 @@
       padding: 24px;
     }
 
-    header {
-      text-align: center;
-      margin-bottom: 40px;
-    }
-
-    header h1 {
-      font-size: 2.2rem;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-    }
-
+    header { text-align: center; margin-bottom: 40px; }
+    header h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.5px; }
     header h1 span { color: #6c47ff; }
-
-    header p {
-      margin-top: 8px;
-      color: #666;
-      font-size: 1rem;
-    }
+    header p { margin-top: 8px; color: #666; font-size: 1rem; }
 
     .card {
       background: #fff;
@@ -49,275 +36,306 @@
       max-width: 540px;
     }
 
-    /* Drop zone */
+    /* ── Drop zone ── */
     #drop-zone {
       border: 2.5px dashed #d0cce8;
       border-radius: 14px;
       padding: 40px 24px;
       text-align: center;
       cursor: pointer;
-      transition: border-color 0.2s, background 0.2s;
+      transition: border-color .2s, background .2s;
       position: relative;
     }
-
-    #drop-zone.drag-over {
-      border-color: #6c47ff;
-      background: #f3f0ff;
-    }
-
+    #drop-zone.drag-over { border-color: #6c47ff; background: #f3f0ff; }
     #drop-zone input[type="file"] {
-      position: absolute;
-      inset: 0;
-      opacity: 0;
-      cursor: pointer;
-      width: 100%;
-      height: 100%;
+      position: absolute; inset: 0; opacity: 0;
+      cursor: pointer; width: 100%; height: 100%;
     }
-
     #drop-zone .icon { font-size: 2.2rem; margin-bottom: 10px; display: block; }
     #drop-zone p { font-size: 1rem; color: #555; }
     #drop-zone strong { color: #6c47ff; }
     #drop-zone .hint { font-size: 0.8rem; color: #aaa; margin-top: 6px; }
 
-    /* File list */
-    #file-list {
-      display: none;
-      flex-direction: column;
-      gap: 6px;
-      margin-top: 16px;
-    }
+    /* ── File list ── */
+    #file-list { display: none; flex-direction: column; gap: 6px; margin-top: 16px; }
 
     .file-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      background: #f3f0ff;
-      border-radius: 10px;
-      padding: 10px 14px;
+      display: flex; align-items: center; gap: 10px;
+      background: #f3f0ff; border-radius: 10px; padding: 10px 14px;
     }
-
     .file-row .ficon { font-size: 1.2rem; flex-shrink: 0; }
-
-    .file-row .fdetails {
-      flex: 1;
-      min-width: 0;
-    }
-
+    .file-row .fdetails { flex: 1; min-width: 0; }
     .file-row .fname {
-      font-weight: 600;
-      font-size: 0.88rem;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      font-weight: 600; font-size: 0.88rem;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-
     .file-row .fmeta { font-size: 0.75rem; color: #999; margin-top: 1px; }
-
-    .file-row .fstatus {
-      font-size: 0.75rem;
-      font-weight: 600;
-      flex-shrink: 0;
-      color: #aaa;
-    }
-
+    .file-row .fstatus { font-size: 0.75rem; font-weight: 600; flex-shrink: 0; color: #aaa; }
     .file-row .fstatus.done  { color: #22c55e; }
     .file-row .fstatus.error { color: #ef4444; }
     .file-row .fstatus.active { color: #6c47ff; }
 
-    .file-row .fremove {
+    .edit-btn {
+      flex-shrink: 0;
+      background: #fff;
+      border: 1.5px solid #d0cce8;
+      border-radius: 7px;
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #6c47ff;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: border-color .15s, background .15s;
+    }
+    .edit-btn:hover { border-color: #6c47ff; background: #f3f0ff; }
+    .edit-btn.edited { background: #6c47ff; color: #fff; border-color: #6c47ff; }
+
+    .fremove {
       background: none; border: none;
-      color: #ccc; cursor: pointer;
-      font-size: 1rem; padding: 2px 4px;
-      line-height: 1; flex-shrink: 0;
+      color: #ccc; cursor: pointer; font-size: 1rem;
+      padding: 2px 4px; line-height: 1; flex-shrink: 0;
     }
-    .file-row .fremove:hover { color: #888; }
+    .fremove:hover { color: #888; }
 
-    /* Add more / clear all row */
+    /* ── File actions ── */
     #file-actions {
-      display: none;
-      align-items: center;
-      justify-content: space-between;
-      margin-top: 10px;
+      display: none; align-items: center;
+      justify-content: space-between; margin-top: 10px;
     }
-
     .link-btn {
       background: none; border: none;
       color: #6c47ff; font-size: 0.82rem;
-      font-weight: 600; cursor: pointer;
-      padding: 0;
+      font-weight: 600; cursor: pointer; padding: 0;
     }
     .link-btn:hover { text-decoration: underline; }
     .link-btn.danger { color: #aaa; }
     .link-btn.danger:hover { color: #888; }
 
-    /* Options */
+    /* ── Options ── */
     #options {
-      display: none;
-      flex-direction: column;
-      gap: 0;
-      margin-top: 20px;
-      border: 1px solid #eee;
-      border-radius: 12px;
-      overflow: hidden;
+      display: none; flex-direction: column; gap: 0;
+      margin-top: 20px; border: 1px solid #eee;
+      border-radius: 12px; overflow: hidden;
     }
-
     .option-row {
-      display: flex;
-      align-items: center;
+      display: flex; align-items: center;
       justify-content: space-between;
-      padding: 14px 16px;
-      gap: 12px;
-      background: #fafafa;
+      padding: 14px 16px; gap: 12px; background: #fafafa;
     }
-
     .option-row + .option-row { border-top: 1px solid #eee; }
-
     .option-label { display: flex; flex-direction: column; gap: 2px; }
     .option-title { font-size: 0.9rem; font-weight: 600; }
     .option-sub   { font-size: 0.75rem; color: #999; }
 
-    /* Stepper */
     .stepper { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-
     .step-btn {
-      width: 32px; height: 32px;
-      border-radius: 8px;
-      border: 1.5px solid #ddd;
-      background: #fff;
+      width: 32px; height: 32px; border-radius: 8px;
+      border: 1.5px solid #ddd; background: #fff;
       font-size: 1.1rem; font-weight: 700;
       cursor: pointer; color: #444;
       display: flex; align-items: center; justify-content: center;
-      transition: border-color 0.15s;
+      transition: border-color .15s;
     }
     .step-btn:hover { border-color: #6c47ff; color: #6c47ff; }
-
     #copies-val { font-size: 1.1rem; font-weight: 700; min-width: 24px; text-align: center; }
 
-    /* Toggle */
     .toggle { position: relative; flex-shrink: 0; }
     .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
-
     .track {
-      display: block;
-      width: 44px; height: 26px;
-      background: #ddd;
-      border-radius: 99px;
-      cursor: pointer;
-      transition: background 0.2s;
-      position: relative;
+      display: block; width: 44px; height: 26px;
+      background: #ddd; border-radius: 99px;
+      cursor: pointer; transition: background .2s; position: relative;
     }
-
     .track::after {
-      content: '';
-      position: absolute;
-      top: 3px; left: 3px;
-      width: 20px; height: 20px;
-      border-radius: 50%;
-      background: #fff;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-      transition: transform 0.2s;
+      content: ''; position: absolute;
+      top: 3px; left: 3px; width: 20px; height: 20px;
+      border-radius: 50%; background: #fff;
+      box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: transform .2s;
     }
-
     .toggle input:checked + .track { background: #6c47ff; }
     .toggle input:checked + .track::after { transform: translateX(18px); }
 
-    /* Stats */
+    /* ── Stats ── */
     #stats {
-      display: none;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 10px;
-      margin-top: 20px;
+      display: none; grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px; margin-top: 20px;
     }
-
     .stat-box {
-      background: #fafafa;
-      border: 1px solid #eee;
-      border-radius: 10px;
-      padding: 12px 10px;
-      text-align: center;
+      background: #fafafa; border: 1px solid #eee;
+      border-radius: 10px; padding: 12px 10px; text-align: center;
     }
-
     .stat-box .label {
-      font-size: 0.7rem;
-      color: #999;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
+      font-size: 0.7rem; color: #999;
+      text-transform: uppercase; letter-spacing: .05em;
     }
-
-    .stat-box .value {
-      font-size: 1.4rem;
-      font-weight: 700;
-      margin-top: 4px;
-      color: #1a1a1a;
-    }
-
+    .stat-box .value { font-size: 1.4rem; font-weight: 700; margin-top: 4px; }
     .stat-box.highlight .value { color: #6c47ff; }
 
-    /* Button */
+    /* ── Primary button ── */
     #action-btn {
-      display: block;
-      width: 100%;
-      margin-top: 20px;
-      padding: 16px;
-      background: #6c47ff;
-      color: #fff;
-      font-size: 1.05rem;
-      font-weight: 700;
-      border: none;
-      border-radius: 12px;
-      cursor: pointer;
-      transition: background 0.15s, transform 0.1s;
-      letter-spacing: 0.01em;
+      display: block; width: 100%; margin-top: 20px;
+      padding: 16px; background: #6c47ff; color: #fff;
+      font-size: 1.05rem; font-weight: 700; border: none;
+      border-radius: 12px; cursor: pointer;
+      transition: background .15s, transform .1s;
     }
-
     #action-btn:hover:not(:disabled) { background: #5535e0; }
-    #action-btn:active:not(:disabled) { transform: scale(0.98); }
+    #action-btn:active:not(:disabled) { transform: scale(.98); }
     #action-btn:disabled { background: #c4b8ff; cursor: not-allowed; }
 
-    /* Progress */
+    /* ── Progress ── */
     #progress-wrap { display: none; margin-top: 16px; }
+    #progress-bar-bg { height: 6px; background: #ede9ff; border-radius: 99px; overflow: hidden; }
+    #progress-bar { height: 100%; background: #6c47ff; border-radius: 99px; width: 0%; transition: width .25s ease; }
+    #progress-label { font-size: 0.8rem; color: #888; margin-top: 6px; text-align: center; }
 
-    #progress-bar-bg {
-      height: 6px;
-      background: #ede9ff;
-      border-radius: 99px;
-      overflow: hidden;
-    }
-
-    #progress-bar {
-      height: 100%;
-      background: #6c47ff;
-      border-radius: 99px;
-      width: 0%;
-      transition: width 0.25s ease;
-    }
-
-    #progress-label {
-      font-size: 0.8rem;
-      color: #888;
-      margin-top: 6px;
-      text-align: center;
-    }
-
-    /* Error */
+    /* ── Error ── */
     #error-msg {
+      display: none; margin-top: 16px;
+      background: #fff0f0; border: 1px solid #ffd0d0;
+      border-radius: 10px; padding: 12px 16px;
+      font-size: .875rem; color: #c0392b;
+    }
+
+    /* ════════════════════════════════
+       EDITOR VIEW
+    ════════════════════════════════ */
+    #editor-view {
       display: none;
-      margin-top: 16px;
-      background: #fff0f0;
-      border: 1px solid #ffd0d0;
-      border-radius: 10px;
-      padding: 12px 16px;
-      font-size: 0.875rem;
-      color: #c0392b;
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 4px 32px rgba(0,0,0,.08);
+      padding: 28px 24px 32px;
+      width: 100%;
+      max-width: 900px;
     }
 
-    footer {
-      margin-top: 32px;
-      font-size: 0.8rem;
-      color: #bbb;
-      text-align: center;
+    #editor-header {
+      display: flex; align-items: center; gap: 14px; margin-bottom: 24px;
     }
 
+    #editor-back {
+      flex-shrink: 0;
+      background: #f3f0ff; border: none;
+      border-radius: 10px; padding: 8px 14px;
+      font-size: 0.875rem; font-weight: 600;
+      color: #6c47ff; cursor: pointer;
+    }
+    #editor-back:hover { background: #ebe6ff; }
+
+    #editor-title-wrap .etitle { font-weight: 700; font-size: 1rem; }
+    #editor-title-wrap .emeta  { font-size: 0.78rem; color: #999; margin-top: 2px; }
+
+    #editor-toolbar {
+      display: flex; gap: 8px; flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .toolbar-btn {
+      background: #f5f4f0; border: 1.5px solid #e5e3dd;
+      border-radius: 8px; padding: 7px 14px;
+      font-size: 0.8rem; font-weight: 600; color: #444;
+      cursor: pointer; transition: border-color .15s;
+    }
+    .toolbar-btn:hover { border-color: #6c47ff; color: #6c47ff; }
+
+    /* Page strip */
+    #page-strip {
+      display: flex;
+      align-items: flex-start;
+      gap: 0;
+      overflow-x: auto;
+      padding: 12px 4px 20px;
+      min-height: 200px;
+      scrollbar-width: thin;
+    }
+
+    /* Insert zone between pages */
+    .insert-zone {
+      display: flex; align-items: center;
+      flex-shrink: 0; padding: 0 3px;
+    }
+
+    .insert-btn {
+      width: 26px; height: 80px;
+      border: 1.5px dashed #e0ddf8;
+      border-radius: 8px; background: none;
+      color: #ccc; font-size: 1rem;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: border-color .15s, color .15s, background .15s;
+    }
+    .insert-btn:hover {
+      border-color: #6c47ff; color: #6c47ff; background: #f3f0ff;
+    }
+
+    /* Page card */
+    .page-card {
+      position: relative; flex-shrink: 0;
+      text-align: center; width: 96px;
+    }
+
+    .page-card.selected .thumb-wrap { outline: 2.5px solid #6c47ff; border-radius: 5px; }
+
+    .thumb-wrap {
+      width: 90px; margin: 0 auto;
+      border-radius: 4px; overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,.12);
+      position: relative;
+    }
+
+    .thumb-wrap canvas { display: block; width: 100%; height: auto; }
+
+    .blank-thumb {
+      width: 90px; height: 127px; /* A4 ratio */
+      background: #fff;
+      border: 1.5px dashed #ccc;
+      border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.65rem; color: #bbb; text-transform: uppercase;
+      letter-spacing: .05em; margin: 0 auto;
+    }
+
+    .page-num {
+      font-size: 0.68rem; color: #aaa;
+      margin-top: 5px; line-height: 1.2;
+    }
+
+    /* Delete button — always visible on mobile, hover on desktop */
+    .page-del {
+      position: absolute; top: -7px; right: 0;
+      width: 22px; height: 22px; border-radius: 50%;
+      background: #ff4444; color: #fff; border: 2px solid #fff;
+      font-size: 0.65rem; font-weight: 700;
+      cursor: pointer; display: flex;
+      align-items: center; justify-content: center;
+      box-shadow: 0 1px 4px rgba(0,0,0,.2);
+      opacity: 0; transition: opacity .15s;
+    }
+    .page-card:hover .page-del,
+    .page-card:focus-within .page-del { opacity: 1; }
+
+    /* Always show on touch */
+    @media (pointer: coarse) {
+      .page-del { opacity: 1; }
+    }
+
+    /* Editor done button */
+    #editor-done {
+      display: block; width: 100%; margin-top: 24px;
+      padding: 15px; background: #6c47ff; color: #fff;
+      font-size: 1rem; font-weight: 700; border: none;
+      border-radius: 12px; cursor: pointer; transition: background .15s;
+    }
+    #editor-done:hover { background: #5535e0; }
+
+    #editor-page-count {
+      text-align: center; font-size: 0.78rem;
+      color: #999; margin-top: 12px;
+    }
+
+    footer { margin-top: 32px; font-size: .8rem; color: #bbb; text-align: center; }
     footer a { color: #bbb; }
   </style>
 </head>
@@ -325,10 +343,11 @@
 
 <header>
   <h1>Blank<span>It</span></h1>
-  <p>Insert blank pages &amp; duplicate pages in any PDF — right in your browser.</p>
+  <p>Edit, duplicate &amp; add blank pages to any PDF — right in your browser.</p>
 </header>
 
-<div class="card">
+<!-- ── MAIN VIEW ── -->
+<div class="card" id="main-view">
 
   <div id="drop-zone">
     <input type="file" id="file-input" accept=".pdf,application/pdf" multiple />
@@ -345,7 +364,6 @@
   </div>
   <input type="file" id="add-more-input" accept=".pdf,application/pdf" multiple style="display:none" />
 
-  <!-- Options -->
   <div id="options">
     <div class="option-row">
       <div class="option-label">
@@ -395,12 +413,42 @@
   <div id="error-msg"></div>
 </div>
 
+<!-- ── EDITOR VIEW ── -->
+<div id="editor-view">
+  <div id="editor-header">
+    <button id="editor-back">← Back</button>
+    <div id="editor-title-wrap">
+      <div class="etitle" id="editor-title"></div>
+      <div class="emeta" id="editor-meta"></div>
+    </div>
+  </div>
+
+  <div id="editor-toolbar">
+    <button class="toolbar-btn" id="tb-add-start">＋ Blank at start</button>
+    <button class="toolbar-btn" id="tb-add-end">＋ Blank at end</button>
+    <button class="toolbar-btn" id="tb-del-selected">🗑 Delete selected</button>
+    <button class="toolbar-btn" id="tb-reset">↩ Reset</button>
+  </div>
+
+  <div id="page-strip"></div>
+  <div id="editor-page-count"></div>
+
+  <button id="editor-done">✓ Save &amp; close editor</button>
+</div>
+
 <footer>
   All processing happens in your browser. No files are uploaded anywhere.<br/>
   <a href="https://pdf-lib.js.org" target="_blank" rel="noopener">Powered by pdf-lib</a>
 </footer>
 
 <script>
+  // ── PDF.js worker ────────────────────────────────────────────────
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
+  // ── DOM refs ─────────────────────────────────────────────────────
+  const mainView     = document.getElementById('main-view');
+  const editorView   = document.getElementById('editor-view');
   const dropZone     = document.getElementById('drop-zone');
   const fileInput    = document.getElementById('file-input');
   const fileListEl   = document.getElementById('file-list');
@@ -423,19 +471,53 @@
   const progressLbl  = document.getElementById('progress-label');
   const errorMsg     = document.getElementById('error-msg');
 
-  // State
-  let files = []; // { file, name, pages }
+  const editorBack       = document.getElementById('editor-back');
+  const editorTitleEl    = document.getElementById('editor-title');
+  const editorMetaEl     = document.getElementById('editor-meta');
+  const pageStrip        = document.getElementById('page-strip');
+  const editorDone       = document.getElementById('editor-done');
+  const editorPageCount  = document.getElementById('editor-page-count');
+
+  // ── App state ────────────────────────────────────────────────────
+  let files = [];   // { file, name, pages, edits: null|[], editBtn }
   let copies = 1;
 
-  // ── Stepper & toggle ────────────────────────────────
-  copiesDown.addEventListener('click', () => { if (copies > 1)  { copies--; refreshStats(); } });
-  copiesUp.addEventListener('click',   () => { if (copies < 10) { copies++; refreshStats(); } });
+  // Editor state
+  let editorEntry  = null;
+  let editorPdfJs  = null;  // pdfjs document
+  let editorPages  = [];    // [{ kind:'page', srcIdx:N } | { kind:'blank', w, h }]
+  let editorOrigPages = []; // reset target
+  let selectedCards = new Set(); // indices
+
+  // ── Utilities ────────────────────────────────────────────────────
+  function readFileAsArrayBuffer(file) {
+    if (file.arrayBuffer) return file.arrayBuffer();
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload  = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsArrayBuffer(file);
+    });
+  }
+
+  function formatBytes(b) {
+    if (b < 1024) return b + ' B';
+    if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+    return (b/1048576).toFixed(1) + ' MB';
+  }
+
+  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  // ── Stepper / toggle ─────────────────────────────────────────────
+  copiesDown.addEventListener('click', () => { if (copies > 1)  { copies--; refreshStats(); }});
+  copiesUp.addEventListener('click',   () => { if (copies < 10) { copies++; refreshStats(); }});
   blankToggle.addEventListener('change', refreshStats);
 
   function refreshStats() {
     copiesValEl.textContent = copies;
     if (!files.length) return;
-    const totalPages = files.reduce((s, f) => s + (f.pages || 0), 0);
+    const totalPages = files.reduce((s,f) => s + (f.pages||0), 0);
     const avgPages   = Math.round(totalPages / files.length);
     const outPerFile = avgPages * copies * (blankToggle.checked ? 2 : 1);
     statFiles.textContent   = files.length;
@@ -447,66 +529,43 @@
     actionBtn.textContent   = files.length === 1 ? 'Process PDF' : `Process ${files.length} PDFs`;
   }
 
-  // ── File reading ─────────────────────────────────────
-  function readFileAsArrayBuffer(file) {
-    if (file.arrayBuffer) return file.arrayBuffer();
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload  = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsArrayBuffer(file);
-    });
-  }
-
-  function formatBytes(bytes) {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  }
-
-  // ── Drag & drop ──────────────────────────────────────
+  // ── Drag & drop ──────────────────────────────────────────────────
   dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
   dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
   dropZone.addEventListener('drop', e => {
-    e.preventDefault();
-    dropZone.classList.remove('drag-over');
+    e.preventDefault(); dropZone.classList.remove('drag-over');
     addFiles([...e.dataTransfer.files]);
   });
-
-  fileInput.addEventListener('change', () => { addFiles([...fileInput.files]); fileInput.value = ''; });
-
+  fileInput.addEventListener('change', () => { addFiles([...fileInput.files]); fileInput.value=''; });
   addMoreBtn.addEventListener('click', () => addMoreInput.click());
-  addMoreInput.addEventListener('change', () => { addFiles([...addMoreInput.files]); addMoreInput.value = ''; });
-
+  addMoreInput.addEventListener('change', () => { addFiles([...addMoreInput.files]); addMoreInput.value=''; });
   clearAllBtn.addEventListener('click', reset);
 
-  // ── Add files ────────────────────────────────────────
+  // ── Add files ────────────────────────────────────────────────────
   async function addFiles(incoming) {
-    const pdfs = incoming.filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+    const pdfs = incoming.filter(f => f.type==='application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
     if (!pdfs.length) { showError('No valid PDF files found.'); return; }
     hideError();
 
     for (const f of pdfs) {
-      // Deduplicate by name+size
-      if (files.find(x => x.name === f.name && x.file.size === f.size)) continue;
-      const entry = { file: f, name: f.name, pages: null, rowEl: null };
+      if (files.find(x => x.name===f.name && x.file.size===f.size)) continue;
+      const entry = { file: f, name: f.name, pages: null, edits: null, rowEl: null, editBtn: null };
       files.push(entry);
       entry.rowEl = createRow(entry);
       fileListEl.appendChild(entry.rowEl);
     }
 
-    fileListEl.style.display  = 'flex';
+    fileListEl.style.display   = 'flex';
     fileActionsEl.style.display = 'flex';
     refreshStats();
 
-    // Load page counts async
     for (const entry of files.filter(e => e.pages === null)) {
       try {
         const buf = await readFileAsArrayBuffer(entry.file);
         const pdf = await PDFLib.PDFDocument.load(buf, { ignoreEncryption: true });
         entry.pages = pdf.getPageCount();
         entry.rowEl.querySelector('.fmeta').textContent =
-          `${formatBytes(entry.file.size)} · ${entry.pages} page${entry.pages !== 1 ? 's' : ''}`;
+          `${formatBytes(entry.file.size)} · ${entry.pages} page${entry.pages!==1?'s':''}`;
       } catch {
         entry.pages = 0;
         entry.rowEl.querySelector('.fmeta').textContent = formatBytes(entry.file.size);
@@ -525,8 +584,12 @@
         <div class="fmeta">${formatBytes(entry.file.size)}</div>
       </div>
       <span class="fstatus">—</span>
+      <button class="edit-btn" title="Edit pages">✏️ Edit</button>
       <button class="fremove" title="Remove">✕</button>
     `;
+    const editBtn = row.querySelector('.edit-btn');
+    entry.editBtn = editBtn;
+    editBtn.addEventListener('click', () => openEditor(entry));
     row.querySelector('.fremove').addEventListener('click', () => removeFile(entry));
     return row;
   }
@@ -534,18 +597,12 @@
   function removeFile(entry) {
     files = files.filter(f => f !== entry);
     entry.rowEl.remove();
-    if (!files.length) {
-      reset();
-    } else {
-      refreshStats();
-    }
+    if (!files.length) reset(); else refreshStats();
   }
 
-  // ── Reset ────────────────────────────────────────────
+  // ── Reset ────────────────────────────────────────────────────────
   function reset() {
-    files = [];
-    copies = 1;
-    copiesValEl.textContent = 1;
+    files = []; copies = 1; copiesValEl.textContent = 1;
     fileListEl.innerHTML = '';
     fileListEl.style.display    = 'none';
     fileActionsEl.style.display = 'none';
@@ -559,41 +616,235 @@
     hideError();
   }
 
-  // ── Progress ─────────────────────────────────────────
+  // ── Progress / error ─────────────────────────────────────────────
   function setProgress(pct, label) {
     progressWrap.style.display = 'block';
     progressBar.style.width    = pct + '%';
     progressLbl.textContent    = label;
   }
+  function showError(msg) { errorMsg.textContent=msg; errorMsg.style.display='block'; }
+  function hideError()    { errorMsg.textContent='';  errorMsg.style.display='none';  }
 
-  function showError(msg) { errorMsg.textContent = msg; errorMsg.style.display = 'block'; }
-  function hideError()    { errorMsg.textContent = ''; errorMsg.style.display = 'none'; }
+  // ════════════════════════════════════════════════════════════════
+  //  PAGE EDITOR
+  // ════════════════════════════════════════════════════════════════
 
-  // ── Process one PDF ──────────────────────────────────
+  async function openEditor(entry) {
+    editorEntry  = entry;
+    selectedCards.clear();
+
+    editorTitleEl.textContent = entry.name;
+    editorMetaEl.textContent  = 'Loading thumbnails…';
+
+    mainView.style.display   = 'none';
+    editorView.style.display = 'block';
+
+    // Build initial page list (from saved edits or default)
+    const buf = await readFileAsArrayBuffer(entry.file);
+    editorPdfJs = await pdfjsLib.getDocument({ data: buf.slice(0) }).promise;
+
+    // Default: all pages in order
+    if (!entry.edits) {
+      entry.edits = Array.from({ length: entry.pages || editorPdfJs.numPages },
+        (_, i) => ({ kind: 'page', srcIdx: i }));
+    }
+
+    editorPages     = entry.edits.map(p => ({ ...p }));
+    editorOrigPages = Array.from({ length: editorPdfJs.numPages }, (_, i) => ({ kind:'page', srcIdx:i }));
+
+    await renderStrip();
+    editorMetaEl.textContent = `${editorPages.length} page${editorPages.length!==1?'s':''} · tap a page to select`;
+  }
+
+  async function renderStrip() {
+    pageStrip.innerHTML = '';
+    selectedCards.clear();
+    updateEditorCount();
+
+    // Render all pages (with leading insert zone)
+    for (let i = 0; i <= editorPages.length; i++) {
+      // Insert zone
+      const iz = document.createElement('div');
+      iz.className = 'insert-zone';
+      const ib = document.createElement('button');
+      ib.className = 'insert-btn';
+      ib.textContent = '+';
+      ib.title = 'Insert blank page here';
+      const pos = i;
+      ib.addEventListener('click', () => insertBlankAt(pos));
+      iz.appendChild(ib);
+      pageStrip.appendChild(iz);
+
+      if (i < editorPages.length) {
+        const card = await buildCard(i);
+        pageStrip.appendChild(card);
+      }
+    }
+  }
+
+  async function buildCard(idx) {
+    const spec = editorPages[idx];
+    const card = document.createElement('div');
+    card.className = 'page-card';
+    card.dataset.idx = idx;
+
+    // Thumbnail
+    const thumbWrap = document.createElement('div');
+
+    if (spec.kind === 'blank') {
+      const bthumb = document.createElement('div');
+      bthumb.className = 'blank-thumb';
+      bthumb.textContent = 'Blank';
+      thumbWrap.appendChild(bthumb);
+    } else {
+      thumbWrap.className = 'thumb-wrap';
+      try {
+        const page     = await editorPdfJs.getPage(spec.srcIdx + 1); // 1-indexed
+        const viewport = page.getViewport({ scale: 0.28 });
+        const canvas   = document.createElement('canvas');
+        canvas.width   = viewport.width;
+        canvas.height  = viewport.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        thumbWrap.appendChild(canvas);
+      } catch {
+        // Fallback grey rectangle
+        const fb = document.createElement('div');
+        fb.style.cssText = 'width:90px;height:127px;background:#eee;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:0.7rem;color:#aaa';
+        fb.textContent = 'Page ' + (spec.srcIdx+1);
+        thumbWrap.appendChild(fb);
+      }
+    }
+
+    // Page number label
+    const num = document.createElement('div');
+    num.className = 'page-num';
+    num.textContent = `${idx+1}` + (spec.kind==='blank' ? '\n(blank)' : '');
+
+    // Delete button
+    const del = document.createElement('button');
+    del.className = 'page-del';
+    del.textContent = '×';
+    del.title = 'Delete this page';
+    del.addEventListener('click', e => { e.stopPropagation(); deletePageAt(idx); });
+
+    // Select on click
+    card.addEventListener('click', () => toggleSelect(idx, card));
+
+    card.appendChild(thumbWrap);
+    card.appendChild(num);
+    card.appendChild(del);
+    return card;
+  }
+
+  function toggleSelect(idx, card) {
+    if (selectedCards.has(idx)) {
+      selectedCards.delete(idx);
+      card.classList.remove('selected');
+    } else {
+      selectedCards.add(idx);
+      card.classList.add('selected');
+    }
+  }
+
+  async function deletePageAt(idx) {
+    editorPages.splice(idx, 1);
+    await renderStrip();
+  }
+
+  async function insertBlankAt(pos) {
+    // Use dimensions of nearest page, or A4 default
+    let w = 595, h = 842;
+    const ref = editorPages.find(p => p.kind === 'page');
+    if (ref && editorPdfJs) {
+      try {
+        const pg = await editorPdfJs.getPage(ref.srcIdx + 1);
+        const vp = pg.getViewport({ scale: 1 });
+        w = vp.width; h = vp.height;
+      } catch {}
+    }
+    editorPages.splice(pos, 0, { kind: 'blank', w, h });
+    await renderStrip();
+  }
+
+  function updateEditorCount() {
+    editorPageCount.textContent =
+      `${editorPages.length} page${editorPages.length!==1?'s':''} total`;
+  }
+
+  // Toolbar buttons
+  document.getElementById('tb-add-start').addEventListener('click', () => insertBlankAt(0));
+  document.getElementById('tb-add-end').addEventListener('click',   () => insertBlankAt(editorPages.length));
+
+  document.getElementById('tb-del-selected').addEventListener('click', async () => {
+    if (!selectedCards.size) return;
+    const toDelete = [...selectedCards].sort((a,b) => b-a);
+    for (const idx of toDelete) editorPages.splice(idx, 1);
+    await renderStrip();
+  });
+
+  document.getElementById('tb-reset').addEventListener('click', async () => {
+    editorPages = editorOrigPages.map(p => ({ ...p }));
+    await renderStrip();
+  });
+
+  editorBack.addEventListener('click', () => {
+    // Discard changes, return
+    mainView.style.display   = 'block';
+    editorView.style.display = 'none';
+    editorPdfJs = null;
+  });
+
+  editorDone.addEventListener('click', () => {
+    // Save edits to entry
+    editorEntry.edits = editorPages.map(p => ({ ...p }));
+    editorEntry.pages = editorPages.length;
+
+    // Update row meta
+    editorEntry.rowEl.querySelector('.fmeta').textContent =
+      `${formatBytes(editorEntry.file.size)} · ${editorPages.length} pages (edited)`;
+    editorEntry.editBtn.classList.add('edited');
+    editorEntry.editBtn.textContent = '✏️ Edited';
+
+    mainView.style.display   = 'block';
+    editorView.style.display = 'none';
+    editorPdfJs = null;
+    refreshStats();
+  });
+
+  // ════════════════════════════════════════════════════════════════
+  //  PROCESS PDF(s)
+  // ════════════════════════════════════════════════════════════════
+
   async function processPDF(entry, addBlanks) {
     const buf    = await readFileAsArrayBuffer(entry.file);
     const srcDoc = await PDFLib.PDFDocument.load(buf, { ignoreEncryption: true });
     const outDoc = await PDFLib.PDFDocument.create();
-    const pageCount = srcDoc.getPageCount();
 
-    for (let i = 0; i < pageCount; i++) {
+    // Use edited page list if available, otherwise all pages in order
+    const pageList = entry.edits ||
+      Array.from({ length: srcDoc.getPageCount() }, (_, i) => ({ kind:'page', srcIdx: i }));
+
+    for (let i = 0; i < pageList.length; i++) {
+      const spec = pageList[i];
+
       for (let c = 0; c < copies; c++) {
-        const [pg] = await outDoc.copyPages(srcDoc, [i]);
-        outDoc.addPage(pg);
-        if (addBlanks) {
-          const { width, height } = pg.getSize();
-          outDoc.addPage([width, height]);
+        if (spec.kind === 'blank') {
+          outDoc.addPage([spec.w || 595, spec.h || 842]);
+        } else {
+          const [pg] = await outDoc.copyPages(srcDoc, [spec.srcIdx]);
+          outDoc.addPage(pg);
+          if (addBlanks) {
+            const { width, height } = pg.getSize();
+            outDoc.addPage([width, height]);
+          }
         }
       }
+
       if (i % 20 === 19) await new Promise(r => setTimeout(r, 0));
     }
 
     return outDoc.save();
   }
-
-  // ── Download helpers ─────────────────────────────────
-  const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
   function downloadBlob(bytes, fileName) {
     const blob = new Blob([bytes], { type: 'application/pdf' });
@@ -615,7 +866,6 @@
     s.textContent = text;
   }
 
-  // ── Main action ──────────────────────────────────────
   actionBtn.addEventListener('click', async () => {
     if (!files.length) return;
 
@@ -629,22 +879,17 @@
 
     try {
       if (isBatch) {
-        // ── Batch: collect all into a ZIP ──
         const zip = new JSZip();
         const folder = zip.folder('blankit');
 
         for (let i = 0; i < files.length; i++) {
           const entry = files[i];
-          setProgress(
-            Math.round((i / files.length) * 85),
-            `Processing file ${i + 1} of ${files.length}: ${entry.name}…`
-          );
+          setProgress(Math.round((i / files.length) * 85),
+            `Processing file ${i+1} of ${files.length}: ${entry.name}…`);
           setRowStatus(entry, 'active', '⏳');
-
           try {
             const outBytes = await processPDF(entry, addBlanks);
-            const outName  = entry.name.replace(/\.pdf$/i, '') + '_blankit.pdf';
-            folder.file(outName, outBytes);
+            folder.file(entry.name.replace(/\.pdf$/i,'') + '_blankit.pdf', outBytes);
             setRowStatus(entry, 'done', '✓');
           } catch (err) {
             setRowStatus(entry, 'error', '✕');
@@ -652,13 +897,12 @@
           }
         }
 
-        setProgress(90, 'Zipping files…');
+        setProgress(90, 'Zipping…');
         const zipBlob = await zip.generateAsync(
-          { type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 3 } },
-          meta => setProgress(90 + Math.round(meta.percent * 0.1), 'Zipping…')
+          { type:'blob', compression:'DEFLATE', compressionOptions:{ level:3 } },
+          m => setProgress(90 + Math.round(m.percent * 0.1), 'Zipping…')
         );
-
-        setProgress(100, `Done! ${files.length} PDFs zipped. Downloading…`);
+        setProgress(100, `Done! ${files.length} PDFs zipped.`);
 
         if (isIOS) {
           const url = URL.createObjectURL(zipBlob);
@@ -666,26 +910,22 @@
             style="color:#6c47ff;font-weight:700;">Tap to save blankit.zip</a>`;
         } else {
           const url = URL.createObjectURL(zipBlob);
-          const a   = document.createElement('a');
-          a.href = url; a.download = 'blankit.zip';
+          const a = document.createElement('a');
+          a.href=url; a.download='blankit.zip';
           document.body.appendChild(a); a.click(); document.body.removeChild(a);
           setTimeout(() => URL.revokeObjectURL(url), 15000);
           progressLbl.textContent = `Done! ${files.length} PDFs → blankit.zip`;
         }
 
       } else {
-        // ── Single file ──
         const entry = files[0];
         setRowStatus(entry, 'active', '⏳');
         setProgress(10, `Loading ${entry.name}…`);
-
         const outBytes = await processPDF(entry, addBlanks);
-        const outName  = entry.name.replace(/\.pdf$/i, '') + '_blankit.pdf';
-
+        const outName  = entry.name.replace(/\.pdf$/i,'') + '_blankit.pdf';
         setProgress(100, 'Done!');
         setRowStatus(entry, 'done', '✓');
         downloadBlob(outBytes, outName);
-
         if (!isIOS) progressLbl.textContent = `Done! Downloaded ${outName}`;
       }
 
